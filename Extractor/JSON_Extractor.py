@@ -16,7 +16,7 @@ class JSONExtractor:
     def __init__(self, db_connector):
         self.db_connector = db_connector
         
-    def load_to_landing(self, json_data, table_name, file_name=None):
+    def load_to_landing(self, json_data, table_name, file_name=None, api_endpoint=None, response_status=None):
         """
         Main method to load JSON data directly into database with raw_data column
         """
@@ -44,6 +44,18 @@ class JSONExtractor:
                 columns.append('file_name')
                 placeholders.append('%s')
             
+            if 'api_endpoint' in table_columns and api_endpoint:
+                columns.append('api_endpoint')
+                placeholders.append('%s')
+                
+            if 'request_timestamp' in table_columns:
+                columns.append('request_timestamp')
+                placeholders.append('%s')
+                
+            if 'response_status' in table_columns and response_status is not None:
+                columns.append('response_status')
+                placeholders.append('%s')
+            
             # Construct the insert query
             query = f"""
             INSERT INTO {table_name} ({', '.join(columns)}) 
@@ -52,6 +64,8 @@ class JSONExtractor:
             
             # Prepare data for insertion
             records_inserted = 0
+            request_time = datetime.now()
+            
             for json_obj in json_data:
                 values = [Json(json_obj)]  # Use psycopg2.extras.Json for PostgreSQL JSON type
                 
@@ -60,6 +74,15 @@ class JSONExtractor:
                     
                 if 'file_name' in table_columns and file_name:
                     values.append(file_name)
+                    
+                if 'api_endpoint' in table_columns and api_endpoint:
+                    values.append(api_endpoint)
+                    
+                if 'request_timestamp' in table_columns:
+                    values.append(request_time)
+                    
+                if 'response_status' in table_columns and response_status is not None:
+                    values.append(response_status)
                 
                 cursor.execute(query, values)
                 records_inserted += 1
@@ -79,26 +102,41 @@ class JSONExtractor:
     
     def get_table_columns(self, table_name):
         """
-        Get column names from database table
+        Get column names from database table (handles schema.table format)
         """
         try:
             connection = self.db_connector.get_connection()
             cursor = connection.cursor()
             
-            query = """
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = %s
-            """
+            # Handle schema.table format
+            if '.' in table_name:
+                schema_name, table_name_only = table_name.split('.', 1)
+                query = """
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = %s AND table_name = %s
+                ORDER BY ordinal_position
+                """
+                cursor.execute(query, (schema_name, table_name_only))
+                logger.info(f"Querying columns for schema: {schema_name}, table: {table_name_only}")
+            else:
+                query = """
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = %s
+                ORDER BY ordinal_position
+                """
+                cursor.execute(query, (table_name,))
+                logger.info(f"Querying columns for table: {table_name}")
             
-            cursor.execute(query, (table_name,))
             columns = [row[0] for row in cursor.fetchall()]
             cursor.close()
             
+            logger.info(f"Found columns for {table_name}: {columns}")
             return columns
             
         except Exception as e:
-            logger.error(f"Error getting table columns: {str(e)}")
+            logger.error(f"Error getting table columns for {table_name}: {str(e)}")
             return []
         
     def extract_from_file(self, file_path, table_name):

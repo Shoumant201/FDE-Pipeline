@@ -46,24 +46,63 @@ class APIExtractor:
         except Exception as e:
             logger.error(f"Unexpected error for endpoint {endpoint}: {str(e)}")
             return None
+    
+    def make_api_request_with_details(self, endpoint):
+        """
+        Make HTTP request and return both data and response details
+        """
+        try:
+            logger.info(f"Making API request to: {endpoint}")
+            
+            # Send GET request with timeout
+            response = requests.get(endpoint, timeout=30)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            
+            # Parse JSON response
+            json_data = response.json()
+            logger.info(f"Successfully retrieved data from {endpoint} (Status: {response.status_code})")
+            
+            return {
+                'data': json_data,
+                'status_code': response.status_code,
+                'headers': dict(response.headers)
+            }
+            
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout error for endpoint: {endpoint}")
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"HTTP error for endpoint {endpoint}: {str(e)}")
+            return None
+        except ValueError as e:
+            logger.error(f"JSON parsing error for endpoint {endpoint}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error for endpoint {endpoint}: {str(e)}")
+            return None
         
     def extract_endpoint(self, endpoint, table_name):
         """
         Extract data from a single API endpoint
         """
         try:
-            # Make API request
-            json_data = self.make_api_request(endpoint)
+            # Make API request and get response details
+            response_data = self.make_api_request_with_details(endpoint)
             
-            if json_data is None:
+            if response_data is None:
                 logger.error(f"Failed to retrieve data from {endpoint}")
                 return False
             
-            # Send data to JSONExtractor
-            success = self.json_extractor.extract_from_object(
+            json_data = response_data['data']
+            status_code = response_data['status_code']
+            
+            # Send data to JSONExtractor with metadata
+            success = self.json_extractor.load_to_landing(
                 json_data, 
                 table_name, 
-                source_name=endpoint
+                file_name=endpoint,
+                api_endpoint=endpoint,
+                response_status=status_code
             )
             
             if success:
