@@ -1,0 +1,24 @@
+# config.yaml
+database:
+ host: ${DB_HOST}
+ database: FDE
+ user: ${DB_USER}
+ password: ${DB_PASSWORD}
+ port: ${DB_PORT}
+
+
+s3:
+ bucket_name: ${S3_BUCKET_NAME}
+ region: ${AWS_REGION}
+ files:
+   JSON/products.json: landing.lnd_products_json
+   JSON/sales.json: landing.lnd_sales_json
+   CSV/customers.csv: landing.lnd_customers_csv
+   CSV/products.csv: landing.lnd_products_csv
+   CSV/sales.csv: landing.lnd_sales_csv
+
+
+api:
+ endpoints:
+   https://dummyjson.com/products: landing.lnd_products_api
+   https://dummyjson.com/users: landing.lnd_users_api
